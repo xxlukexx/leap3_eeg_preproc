@@ -1,0 +1,147 @@
+% general setup
+
+    clear variables
+       
+    %addpath(genpath('/users/luke/Google Drive/dev/lm_tools'))
+    %addpath(genpath('/users/luke/Google Drive/dev/ECKAnalyse'))
+
+    fprintf('<strong>LEAP EEG preprocessing pipeline starting up...</strong>');
+
+    % paths
+    %path_eeglab     = '/Users/luke/Google Drive/Experiments/pipelines/LEAP/EEG/eeglab13_5_4b';
+    path_eeglab = 'C:\Users\k1926099\Documents\EU_AIMS_EEG_code\EEG_chirag\EEG_chirag\eeglab13_5_4b';
+    
+    path_in         = '/Volumes/Projects/LEAP/_preproc/in/eeg/bl';
+    path_out        = '/Users/luke/Desktop/eeg_tmp_v3';
+    path_corrEvents = '/Volumes/Projects/LEAP/QC/EEG/Correctedevents';
+    path_master     = '/Volumes/Projects/LEAP/_preproc/in/eeg/LEAP_EEG_master.xlsx';
+
+    % eeglab - i have access to all these
+    addpath(path_eeglab);
+    addpath([path_eeglab '/functions/popfunc/'])
+    addpath([path_eeglab '/plugins/dipfit2.3/standard_BESA/'])
+    addpath([path_eeglab '/plugins/dipfit2.3/'])
+    addpath([path_eeglab '/functions/adminfunc'])
+    addpath([path_eeglab '/plugins/fileio'])
+    addpath([path_eeglab '/functions/guifunc'])
+    addpath([path_eeglab '/functions/sigprocfunc'])
+    addpath([path_eeglab '/plugins/firfilt1.6.1'])
+
+    % paralell toolboxteLog
+    if isempty(gcp('nocreate')), parpool('local', 2); end
+
+    % load master ID list
+    tab_master = readtable(path_master);
+    
+    % define whitelist - if not empty, only those IDs in the list will be
+    % processed
+    whitelist = [];
+    whitelist = arrayfun(@num2str, whitelist, 'uniform', false);
+
+    if ~isempty(whitelist)
+        idx_white = ismember(tab_master.Clinical_Subjects, whitelist);
+        tab_master(~idx_white, :) = [];
+    end
+
+numSubs = size(tab_master, 1);
+fprintf('Found %d subjects in master list.\n', numSubs);
+
+% process
+
+    clear fut
+    fc = 0;
+    parGUID = parProgress('INIT');
+    ops = cell(numSubs, 1);
+    
+    for f = 1:numSubs
+        
+    % find ID of the current subject, look for corresponding raw data. If
+    % found, extract site variable and set wave
+
+        % get ID from master list - this may or may not have EEG data, but
+        % if it's in the list then it needs to be checked
+        id = tab_master.Clinical_Subjects{f};
+        
+        % init operations array
+        ops{f} = struct;
+        ops{f}.id = id;
+        ops{f}.PipelineSuccess = false;
+        
+        % look for corresponding raw data
+        path_raw = fullfile(path_in, id);
+        
+        % find site in master table
+        site = tab_master.site{f};
+        
+        % wave is hardcoded at present
+        wave = 'BASELINE';
+        
+    % send for processing on a worker
+    
+        % increment parallel future counter
+        fc = fc + 1;
+        
+        % create parallel future
+        fut(fc) = parfeval(@LEAP_EEG_doPreproc, 1, path_raw, site, wave,...
+            path_out, ops{f});
+        
+        % update status
+        tm = sprintf(' [%s] ', datestr(now, 'HH:MM:SS'));
+        msg = sprintf('Sent dataset %d of %d to worker ', f, numSubs);
+        msg_id = sprintf('[%s]\n', id);
+        cprintf(tm);
+        cprintf('green', msg);
+        cprintf([1.0, 0.5, 0.0], msg_id);
+        
+    end
+    
+    cprintf('green', '\n\nWaiting for first worker to complete...\n');
+
+    % get results from workers
+    for f = 1:fc
+        
+        % retrieve result from worker
+        [idx_return, tmp_ops] = fetchNext(fut);
+        
+        % store operations in correct element in array
+        ops{idx_return} = tmp_ops;
+        
+        % update status
+        tm = sprintf(' [%s] ', datestr(now, 'HH:MM:SS'));
+        msg = sprintf('Received result %d of %d from worker ', f, fc);
+        msg_id = sprintf('[%s]\n', ops{idx_return}.id);
+        cprintf('*red', tm);
+        if ops{idx_return}.PipelineSuccess
+            cprintf('green', msg);
+        else
+            cprintf('red', msg);
+        end
+        cprintf([1.0, 0.5, 0.0], msg_id);
+        
+    end
+
+% clean up / save results
+
+    res = teLogExtract(ops);
+    file_ops = fullfile(path_out, sprintf('operations_%s.mat', datetimeStr));
+    save(file_ops, 'ops', 'tab_master', 'res')
+    file_res = fullfile(path_out, sprintf('results_%s.xlsx', datetimeStr));
+    writetable(res, file_res)
+
+% join tables
+
+    tab_preproc = outerjoin(tab_master, res, 'LeftKeys',...
+        'Clinical_Subjects', 'RightKeys', 'id');
+    
+    % remove excluded IDs
+    idx_excl = strcmpi(tab_preproc.id, 'excluded');
+    tab_preproc(idx_excl, :) = [];
+    
+    % write out joined table
+    [pth, fil, ext] = fileparts(path_master);
+    file_master_joined = fullfile(pth, sprintf('%s.preproc.xlsx', fil));
+    writetable(tab_preproc, file_master_joined)
+
+
+
+
