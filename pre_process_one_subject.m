@@ -34,3 +34,41 @@ site = 'KCL';
 wave = 3;
 LEAP_EEG_doPreproc(path_datafile, site, wave, path_out)
 
+%% DI's edition: 
+
+clear; close all; clc
+
+%add the paths to scripts
+addpath(genpath('/Users/diannailyka/Documents/leap3_eeg_preproc')) %path to LM's scripts
+addpath(genpath('/Users/diannailyka/Documents/eeglab2023.1')) %path to EEGLab functions
+addpath('/Users/diannailyka/Documents/fieldtrip-20230118', '-end'); %FT but without the subfolders (conflict of functions!); 
+
+% define the input and output sources
+file_folder=('/Users/diannailyka/Downloads/input/LEAP_EEG_wave2_exampleRawFiles'); %general folder
+path_out = "/Users/diannailyka/Downloads/output"; %output folder
+
+%define specific folder/loop
+cd(file_folder)
+fileList = dir(file_folder); 
+% !! Make sure to review the list to make sure that there are no empty non-data entries 
+
+load('euaimssub.mat') %load the files with IDs and locations
+tic
+for i = 1:numel(fileList)
+    path_datafile = fullfile(file_folder, fileList(i).name);
+    
+    % learn the site
+    [~, IDchk, ~] = fileparts(path_datafile); %extract the number ID
+    idx = find(strcmp({euaimssub.code}, IDchk)); %find the ID from the list 
+
+    if ~isempty(idx) %if it is present in the list, extract parameters and run preprocessing
+        site = euaimssub(idx).centre;
+        wave = 2;
+
+        % Preprocess
+        LEAP_EEG_doPreproc(path_datafile, site, wave, path_out);
+    end
+end
+toc
+
+

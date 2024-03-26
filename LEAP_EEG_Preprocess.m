@@ -67,6 +67,10 @@ function [data, ops] = LEAP_EEG_Preprocess(data, ops)
         %  fc         - anti-aliasing filter cutoff (pi rad / sample) {default 0.9} --> 0.6 for 300Hz
         %  df         - anti-aliasing filter transition band width (pi rad / sample) {default 0.2}
         %  fc = (desiredFC in Hz)/Fsample *2
+        
+        % disp(size(data{f}.data)); %check the input
+        % disp(any(isnan(data{f}.data(:)))); %check for nan
+
         if data{f}.srate>1000
              data{f} = pop_resample(data{f}, 1000, 0.6, 0.2);
         end

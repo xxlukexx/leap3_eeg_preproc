@@ -1,7 +1,5 @@
 function ops = LEAP_EEG_doPreproc(path_datafile,...
     site, wave, path_out, ops)
-
-%     try
         
         % check output path
         ops.OutputPathValid = exist(path_out, 'dir') == 7;
@@ -11,9 +9,9 @@ function ops = LEAP_EEG_doPreproc(path_datafile,...
         ops.InputPathValid = exist(path_datafile, 'file') == 7;
         if ~ops.InputPathValid, return, end
 
-        % manage paths
-        [~, filename, ~] = fileparts(path_datafile);
-        path_subfolder = fullfile(path_out, filename);
+        %manage paths - output paths
+        [~, filename, ~] = fileparts(path_datafile); %repetitive step from before but learning the ID numb
+        path_subfolder = fullfile(path_out, filename); %create the unique folder output name path
         ops.OutputPath = path_subfolder;
         
         % track success flag
@@ -22,14 +20,14 @@ function ops = LEAP_EEG_doPreproc(path_datafile,...
         % read file
         [data, ops] = LEAP_EEG_loadRaw(path_datafile, site, wave, ops);
         suc = suc && ops.LEAP_EEG_loadRaw;
-        
-        % unify channels
+       
+        % unify channels - DI: do not see the function for channel z-score or flat channels 
         if suc
             [data, ops] = LEAP_EEG_UnifyChannels(data, ops);
             suc = suc && ops.LEAP_EEG_UnifyChannels;
         end
 
-        % preprocess (resample, reref, filter)
+        % preprocess (resample, reref, filter) %DI: not filtering here
         if suc
             [data, ops] = LEAP_EEG_Preprocess(data, ops);
             suc = suc && ops.LEAP_EEG_Preprocess;
@@ -53,10 +51,16 @@ function ops = LEAP_EEG_doPreproc(path_datafile,...
                 
                 % save processed data
                 task = lower(data{d}.euaims.task);
-                outPath = [path_out, filesep, task];
+                %outPath = [path_out, filesep, task];
+                outPath = strcat(path_out, filesep, task); %DI addition
                 outFile = [filename, '_', task];
-                if ~exist(outPath, 'dir'), mkdir(outPath); end
-                pop_saveset(data{d}, 'filename', outFile, 'filepath', outPath);
+
+                %if ~exist(outPath, 'dir'), mkdir(outPath); end
+                if ~isfolder(outPath), mkdir(outPath); end
+
+                %pop_saveset(data{d}, 'filename', outFile, 'filepath', outPath);
+                pop_saveset(data{d}, 'filename', outFile, 'filepath', char(outPath));
+
                 ops.(sprintf('OutputFile_%s', data{d}.euaims.task)) =...
                     fullfile(outPath, outFile);
                 

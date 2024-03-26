@@ -7,16 +7,13 @@ function [data, ops] = LEAP_EEG_loadRaw(folderPath, site, wave, ops)
 
     ops.FoundChannelLocationFile =...
         exist('standard-10-5-cap385.elp', 'file') == 2;
-    if ~ops.FoundChannelLocationFile, return, end
+    if ~ops.FoundChannelLocationFile, return, end %check the channel file, can we plot this? 
     
-% check input paths, and extract the ID from the path
-
     % check path exists
     ops.FolderPathValid = exist(folderPath, 'dir') == 7;
     if ~ops.FolderPathValid, return, end
     
-    % the folder path is the path to the folder containing 'raw_files' and
-    % 'sesion_data' subfolders. It is named with the ID of the participant.
+    % the folder path is the path to the folder containing 'raw_files' and 'sesion_data' subfolders. It is named with the ID of the participant.
     % Find this in the full asbolute path that was passed in
     pParts = strsplit(folderPath, filesep);
     if ~isempty(pParts)
@@ -39,25 +36,23 @@ function [data, ops] = LEAP_EEG_loadRaw(folderPath, site, wave, ops)
     % filter for only sites that do EEG
     siteCodes = siteCodes(doesEEG);
     
-    % check that the site code for the current dataset is valid, and from a
-    % site that did EEG
-    site = upper(site);
+    % check that the site code for the current dataset is valid, and from a site that did EEG
+    site = upper(site); %converts the site to upper case
     ops.SiteValid = ismember(site, siteCodes) || ismember(site, siteLabels);
     if ~ops.SiteValid, return, end
 
-    % if a site labels (e.g. 'MANNHEIM') is supplied in place of a site
-    % code (e.g. 'CIMH') then convert the label to a code
+    % if a site labels (e.g. 'MANNHEIM') is supplied in place of a site code (e.g. 'CIMH') then convert the label to a code
     siteIdx = find(strcmpi(siteLabels, site));
     if ~isempty(siteIdx), site = siteCodes{siteIdx}; end
     
-% locate files inside the data folder. Depending upon the site (and
-% therefore the EEG system) these will differ, so handle each system
-% separately
+% locate files inside the data folder. Depending upon the site (and therefore the EEG system) these will differ, so handle each system separately
     
     % get contents of folder
-    rawPath = fullfile(folderPath, 'raw_files');
+    %rawPath = fullfile(folderPath, 'raw_files');
     %rawPath = [folderPath, filesep, 'raw_files'];
-    d = dir(rawPath);
+
+    rawPath = fullfile(folderPath, 'EEG/raw_files'); %folders have the EEG file; DI: added EEG subfolder because they have it in between
+    d = dir(rawPath); %list files inside the directory
     files = shiftdim(struct2cell(d), 1);
     
     % define raw files according to site. First we define all expected
@@ -133,9 +128,7 @@ function [data, ops] = LEAP_EEG_loadRaw(folderPath, site, wave, ops)
 
     numToLoad = length(foundIdx);
     data = cell(1, numToLoad);
-    
     for f = 1:numToLoad
-        
         try
             switch loadFunction
 
@@ -158,7 +151,6 @@ function [data, ops] = LEAP_EEG_loadRaw(folderPath, site, wave, ops)
             return
             
         end
-        
         % load channel locations
         data{f} = pop_chanedit(data{f}, 'lookup', 'standard-10-5-cap385.elp');
          
@@ -192,8 +184,7 @@ function [data, ops] = LEAP_EEG_loadRaw(folderPath, site, wave, ops)
         data{f}.euaims.audit(1).datestr = datestr(now, 'yyyymmdd');
         data{f}.euaims.audit(1).time = datestr(now, 'HH:MM:SS');
         data{f}.euaims.audit(1).text = 'Raw data loaded';
-        
-        
+            
     end
     ops.LoadedAllRawFiles = true;
     

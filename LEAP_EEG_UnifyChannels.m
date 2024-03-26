@@ -5,19 +5,19 @@ function [data, ops] = LEAP_EEG_UnifyChannels(data, ops)
     % load channel info template
     ops.ChannelTemplateFound = exist('euaimschan.mat', 'file') == 2; 
     if ~ops.ChannelTemplateFound, return, end
-    load('euaimschan.mat')
+    load('euaimschan.mat') % the unified LEAP channel montage
     
     % get number of files (e.g. Utrecht have four separate BDF files, ones
     % for each task)
     numFiles = length(data);
     for f = 1:numFiles
 
-        % rearrange channels
+        % rearrange channels (DI: depends on the system that site use)
         [data{f}, ops] = euaims_channel_rearrange(data{f},...
             data{f}.euaims.site, ops);
         if ~ops.euaims_channel_rearrange, return, end
 
-        % reorder channels according to layout
+        % reorder channels according to layout DI: not yet reordering 
         data{f}.chaninfo = euaimschan.chaninfo;
         data{f}.euaims.chaninfo.templatelabels = {euaimschan.chanlocs.labels};
         data{f}.euaims.chaninfo.channelpresent = false(euaimschan.nbchan,1);
@@ -40,11 +40,11 @@ function [data, ops] = LEAP_EEG_UnifyChannels(data, ops)
         end
         data{f}.euaims.chaninfo.npresentch = data{f}.nbchan;
         
-        % Reorder
+        % Reorder (DI:
         rawdata= data{f}.data;
         data{f}.data = nan(length(euaimschan.chanlocs),size(rawdata,2)); % create Nchan x Nsamples
         data{f}.data(data{f}.euaims.chaninfo.channelpresent,:) = ...
-            rawdata(ideuaimschan(data{f}.euaims.chaninfo.channelpresent) , : );
+            rawdata(ideuaimschan(data{f}.euaims.chaninfo.channelpresent) , : ); %empty chs have nans
         data{f}.chanlocs = euaimschan.chanlocs;
         data{f}.nbchan   = euaimschan.nbchan;
 

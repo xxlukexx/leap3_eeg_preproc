@@ -3,7 +3,7 @@ function [data, ops] = LEAP_EEG_TaskSegment(data, ops)
 ops.LEAP_EEG_TaskSegment = false;
 
 tasks= {'RESTING_STATE','MMN','FACE_ERP','SOCIAL_NONSOCIAL_VIDEOS'};
-corrEvPath = '/Volumes/Projects/LEAP/_preproc/in/eeg/Correctedevents';
+corrEvPath = '/Volumes/Projects/LEAP/_preproc/in/eeg/Correctedevents'; %DI: LEAP2 - not present
 
 switch data{1}.euaims.site
     
@@ -58,9 +58,9 @@ switch data{1}.euaims.site
         data= cell(1,length(tasks));
         
         
-        % Load original EEG events
+        % Load original EEG events 
         corrEvFilename = [corrEvPath, filesep, 'Events_',...
-            dataorig.euaims.id, '.mat'];
+            dataorig.euaims.id, '.mat']; %DI: if event list is corrected, then re-uplaoded 
         if exist(corrEvFilename,'file')==2
             corrected_event = load(corrEvFilename);
             myevent = corrected_event.event;
@@ -79,7 +79,7 @@ switch data{1}.euaims.site
         % check for missing events
         if isempty(myevent), return, end
         
-        % Load event offset
+        % Load event offset - DI: whats the difference here? 
         event_offset = [];
         switch dataorig.euaims.site
             case 'UMCU'
@@ -93,12 +93,13 @@ switch data{1}.euaims.site
         
         % Get EEG events for all tasks
         eegev = euaims_get_eegevent(myevent,dataorig.srate,dataorig.euaims.site, ...
-            [tasks, {'SCREENFLASH'}],event_offset.mean);
+            [tasks, {'SCREENFLASH'}],event_offset.mean); %DI: discuss spurious events and discuss this one 
 
         
-        
+       
         aux = strfind(dataorig.euaims.rawpath,'raw_files');
         tempdatafile = fullfile(dataorig.euaims.rawpath(1:aux-1),'session_files/session1','tempData.mat');
+        %tempdatafile = fullfile(dataorig.euaims.rawpath,'session_files/session1','tempData.mat');
         if exist(tempdatafile,'file')==2
             sesev = euaims_get_sessionevent(tempdatafile,tasks);
         else
@@ -117,33 +118,50 @@ switch data{1}.euaims.site
            end
         end
         
-
         timetasks = nan(length(tasks),2);
         for itask = find(taskpresent)
             eegevt = eegev.(tasks{itask});
             sesevt = sesev.(tasks{itask});
             commentst = dataorig.euaims.comments;
-            
+
+            % if this is the face ERP task, the fixation stimuli are not
+            % recorded in the trial log data, which means the session
+            % events don't have accurate information on the type of
+            % fixation (FLAG = 221, ICON = 222). This will always cause the
+            % comparison between EEG and session events to fail,
+            % erroneously. To fix this, remove 221/222 events from both EEG
+            % and session events before doing the comparison. 
+            if strcmpi(tasks{itask}, 'FACE_ERP')
+                idx_fixation_eeg = eegevt(:, 1) == 221 | eegevt(:, 1) == 222;
+                eegevt(idx_fixation_eeg, :) = [];
+                idx_fixation_ses = sesevt(:, 1) == 221 | sesevt(:, 1) == 222;
+                sesevt(idx_fixation_ses, :) = [];
+            end
 
             if isempty(sesevt)
                commentst{end+1}='no session events';
                evcor = eegevt;
+            elseif isempty(eegevt)
+               commentst{end+1}='no EEG events';
+               evcor = [];
             elseif size(eegevt,1)==size(sesevt,1) && all(eegevt(:,1)==sesevt(:,1))
                 % if raw eeg and session events coincide in code ordering, 
                 % keep the raw eeg events
                 evcor = eegevt;
-                
+                commentst{end+1} = ...
+                        'EEG and session events match';
             else
                 % raw eeg events are different than session events.
                 % go back to the full list of eeg events, assume that codes 
                 % are wrong but times are correct. 
-                
+                 
                 % assuming eeg events have good timing but wrong code, find
                 % what initial event will make the timings in eeg and in
                 % session files match
                 goodbegin=[];
                 for ibeg = 1:size(eegev.all,1)-size(sesevt,1)+1
                     timeerr = eegev.all(ibeg+1:ibeg+size(sesevt,1)-1,3) - sesevt(2:end,3);
+                      % timer{ibeg}=timeerr';
                     if strcmpi(tasks{itask},'FACE_ERP') && mean(abs(timeerr))<0.15
                         % For FACE_ERP use a more relaxed threshold of 15
                         % ms because the timing of the session file is not
@@ -187,27 +205,23 @@ switch data{1}.euaims.site
                         
                     end
                     commentst{end+1}=evcomment;
- 
-                    
-                    if isempty(evcor)
-                        % if eeg events cannot be corrected and we cannot
-                        % find any event code for this task, assume the
-                        % task is not present and do not write file (this
-                        % can happen for instance when subjects performed
-                        % the task (session event present), but EEG data
-                        % was not recoded during this time
-                        taskpresent(itask)=false;
-                    end
-  
                     
                 end
                 
-                
+                if isempty(evcor)
+                    % if eeg events cannot be corrected and we cannot
+                    % find any event code for this task, assume the
+                    % task is not present and do not write file (this
+                    % can happen for instance when subjects performed
+                    % the task (session event present), but EEG data
+                    % was not recoded during this time
+                    taskpresent(itask)=false;
+                end                
                 
             end
             
-            if taskpresent(itask)
-                
+            if taskpresent(itask) && ~isempty(evcor)
+   
                 % Add corrected events
                 dataorig.event = struct('type', ...
                     num2cell(evcor(:,1)), 'value','EEGcode',...

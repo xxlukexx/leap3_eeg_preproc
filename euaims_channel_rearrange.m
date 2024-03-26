@@ -17,6 +17,8 @@ function [data, ops] = euaims_channel_rearrange(data, site, ops)
 ops.euaims_channel_rearrange = false;
 
 Nchan=data.nbchan;
+%data_s = cellfun(@(x) x, data); %Di tried smth
+
 
 %% 1 - RELABEL TO MATCH COMMON MONTAGE LABEL, REMOVE UNNECESSARY CHANNELS AND ADD REFERENCE CHANNEL
 switch site
@@ -25,7 +27,7 @@ switch site
         
         % Add FCz channel used as reference with all 0 values
         data.nbchan                   = Nchan + 1;
-        data.data(Nchan+1,:)          = zeros(1,length(data.times));
+        data.data(Nchan+1,:)          = zeros(1,length(data.times)); %zero at the end of 
         data.chanlocs(Nchan+1).labels = 'FCz';
         
     case 'RUNMC'
@@ -49,7 +51,7 @@ switch site
                 56,'P5';57,'P1';58,'P2';59,'P6';60,'PO7';61,'PO3';62,'POz';...
                 63,'PO4';64,'PO8'};
             for ich = 1:64
-                data.chanlocs(ich).labels = RUNMClabel{ich, 2};
+                data.chanlocs(ich).labels = RUNMClabel{ich, 2}; 
             end
             
             % add FCz channel used as reference with all 0 values
@@ -77,8 +79,16 @@ switch site
     case 'UMCU'
         
         % Relabel electrodes to produce homogenous labels across centres
-        oldlabel = {  'HL',  'HR',  'VO',  'VB','EXG1','EXG2','EXG3','EXG4','EXG5','EXG6','EXG7', 'EXG8'};
-        newlabel = {'EOGL','EOGR','EOGA','EOGB','EOGA','EOGB','EOGL','EOGR',  'ML',  'MR', 'Not','Not-1'};
+        selected_ind = {'185048685294','880258979280','308985002572', '347433880698', '406025860813', '498184660603', '592413773463', '599197502428', '602495883891', '713675032670', '713933341814', '714993068392', '869163187754', '881324181111', '955634127896'};
+        if any(ismember(data.euaims.id, selected_ind))
+           oldlabel = {  'HL',  'HR','S2/VO', 'VB','EXG1','EXG2','EXG3','EXG4','EXG5','EXG6','Nose', 'S1'};
+           newlabel = {'EOGL','EOGR','EOGA','EOGB','EOGA','EOGB','EOGL','EOGR',  'ML',  'MR', 'Not','Not-1'};
+
+        else
+            oldlabel = {  'HL',  'HR',  'VO',  'VB','EXG1','EXG2','EXG3','EXG4','EXG5','EXG6','EXG7', 'EXG8'};
+            newlabel = {'EOGL','EOGR','EOGA','EOGB','EOGA','EOGB','EOGL','EOGR',  'ML',  'MR', 'Not','Not-1'};
+        end
+        
         for ich = 1: length(oldlabel)
             ide = find(strcmpi( {data.chanlocs.labels}, oldlabel{ich}));
             if ~(isempty(ide))
